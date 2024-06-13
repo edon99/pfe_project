@@ -7,7 +7,7 @@ import cv2
 import skimage
 from PIL import Image, ImageColor
 from ultralytics import YOLO
-from detect import detect
+
 
 
 st.write("# Home page")

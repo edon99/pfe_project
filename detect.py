@@ -12,7 +12,7 @@ from ultralytics import YOLO
 
 
 
-def detect_players(stframe,cap, model):
+def detect(stframe,cap, model):
         st.toast(f'Detection Started!')
         while cap.isOpened():
             success, frame = cap.read()

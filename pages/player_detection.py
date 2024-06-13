@@ -7,10 +7,10 @@ import cv2
 import skimage
 from PIL import Image, ImageColor
 from ultralytics import YOLO
-from detect import detect_players
+from detect import detect
 
 
-model = YOLO("ultimate.pt")
+model = YOLO("models/players.pt")
 
 
     ##INTERFACE
@@ -30,7 +30,7 @@ else:
     stframe = st.empty()
 
     if start_button and not stop_button:
-        detect_players(stframe, cap, model)
+        detect(stframe, cap, model)
     else:
         cap.release()
             
