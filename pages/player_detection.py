@@ -30,8 +30,10 @@ else:
     stframe = st.empty()
 
     if start_button and not stop_button:
+        st.toast(f'Detection Started!')
         detect(stframe, cap, model)
     else:
+        st.toast(f'Detection Stopped!')
         cap.release()
             
         

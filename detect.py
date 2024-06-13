@@ -13,7 +13,7 @@ from ultralytics import YOLO
 
 
 def detect(stframe,cap, model):
-        st.toast(f'Detection Started!')
+        
         while cap.isOpened():
             success, frame = cap.read()
             if success:
