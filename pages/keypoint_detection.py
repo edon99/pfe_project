@@ -1,17 +1,10 @@
-import numpy as np
-import pandas as pd
 import streamlit as st
 import tempfile
-import os
 import cv2
-import skimage
-from PIL import Image, ImageColor
 from ultralytics import YOLO
 from detect import detect
 
-
 model = YOLO("models/keypoints.pt")
-
 
     ##INTERFACE
 st.write("# Keypoint Detection")    
@@ -30,7 +23,7 @@ else:
     stframe = st.empty()
 
     if start_button and not stop_button:
-        detect(stframe, cap, model)
+        detect(stframe, cap, model, conf= 0.65)
     else:
         cap.release()
             

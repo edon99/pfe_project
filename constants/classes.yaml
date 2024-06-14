@@ -1,0 +1,23 @@
+# Classes
+ball-players:
+  0: ball
+  1: player
+  2: referee
+
+pitch-keypoints:
+  0: BLA
+  1: BLC
+  2: BLG
+  3: BMC
+  4: BML
+  5: BRA
+  6: BRC
+  7: BRG
+  8: TLA
+  9: TLC
+  10: TLG
+  11: TMC
+  12: TML
+  13: TRA
+  14: TRC
+  15: TRG
