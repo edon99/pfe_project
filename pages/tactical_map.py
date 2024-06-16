@@ -1,49 +1,65 @@
 import streamlit as st
-import random
 import tempfile
+import numpy as np
 import cv2
-from mplsoccer import Pitch
-from matplotlib.patches import Circle
 from utils.load_model import load_models
-from utils.labels_utils import get_labels_dics
-from detect import predict
-
-players_model, keypoints_model = load_models()
-ball_players_dic, pitch_keypoints_dic, keypoints_map_pos = get_labels_dics()
-
-st.write("# 2D Tactical Map")
-video_path = st.file_uploader("Upload your video")
-if video_path is not None:
-    col1, col2 = st.columns(2)
-    with col1:
-        start_button = st.button("Start detection", "start")
-    with col2:
-        stop_button = st.button("Stop detection", "stop")
+from utils.detection import detect
 
 
+@st.cache_data
+def init_data():
+    players_model, keypoints_model = load_models()
+    tac_map = cv2.imread('assets/2d-pitch.png')
+    return players_model, keypoints_model, tac_map
+
+
+def main():
+    players_model, keypoints_model, tac_map = init_data()
+    st.write("# 2D Tactical Map")
+    input_vide_file = st.file_uploader(
+        'Upload your match', type=['mp4', 'mov', 'avi', 'm4v', 'asf'])
+    save_output = st.checkbox(label='Save output', value=False)
+    if save_output:
+        output_file_name = st.text_input(
+            label='File Name (Optional)',
+            placeholder='Enter output video file name.')
+    else:
+        output_file_name = 'out'
+    if input_vide_file is not None:
+        col1, col2 = st.columns(2)
+        with col1:
+            start_button = st.button("Start detection", "start")
+        with col2:
+            stop_button = st.button("Stop detection", "stop")
+
+    tempf = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+    tempf.write(input_vide_file.read())
     stframe = st.empty()
-
+    cap = cv2.VideoCapture(tempf.name)
+    status = False
     if start_button and not stop_button:
-        pitch = Pitch(pitch_color='grass', line_color='white',
-                      stripe=True)  # optional stripes
-        fig, ax = pitch.draw()
-
-        tfile = tempfile.NamedTemporaryFile(delete=False)
-        tfile.write(video_path.read())
-        video_path = tfile.name
-        fps = video_path.video_capture.get(cv2.CAP_PROP_FPS)
-        cap = cv2.VideoCapture(video_path)
-        while cap.isOpened():
-            frame_id = 0
-            success, frame = cap.read()
-            results_players = players_model.predict(frame, imgsz=920, conf=0.4)
-            results_keypoints = keypoints_model.predict(frame, imgsz=920, conf=0.6)
-            
-            # print(results_players, results_keypoints)
-            frame_id += 1
+        st.toast(f'Detection Started!')
+        status = detect(cap,
+                        stframe,
+                        output_file_name,
+                        save_output,
+                        players_model,
+                        keypoints_model,
+                        tac_map = tac_map,
+                        num_pal_colors=3)
         cap.release()
-        # detect(stframe, cap, players_model)
-        # st.pyplot(fig)
-        # detect(stframe, cap, model, conf= 0.65)
-        if stop_button:
+    else:
+        try:
             cap.release()
+        except:
+            pass
+    if stop_button or status:
+        st.toast(f'Detection Stopped!')
+        cap.release()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except SystemExit:
+        pass
