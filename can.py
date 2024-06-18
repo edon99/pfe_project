@@ -1,9 +1,7 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-from mplsoccer import Sbopen,add_image
+from mplsoccer import Sbopen
 from player_viz import passe,shot,pass_cross,transition, persure_juego, pressure_heatmap,mistake,defensive_actions,passnetwork,assists,player
-from PIL import Image
 
 
 st.markdown("""

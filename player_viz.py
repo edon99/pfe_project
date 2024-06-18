@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import streamlit as st
 from mplsoccer import Sbopen, Pitch, VerticalPitch,FontManager
-from statsbombpy import sb
 import cmasher as cmr
 import matplotlib.patheffects as path_effects
 import matplotlib.pyplot as plt

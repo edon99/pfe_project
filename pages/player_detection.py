@@ -1,17 +1,12 @@
-import numpy as np
-import pandas as pd
 import streamlit as st
 import tempfile
-import os
 import cv2
-import skimage
-from PIL import Image, ImageColor
 from ultralytics import YOLO
-from detect import detect, detect_test
+from detect import detect_test
 
 
 
-model = YOLO("models/best.pt")
+model = YOLO("models/players.pt")
 
     ##INTERFACE
 st.write("# Player Detection")    

@@ -6,7 +6,6 @@ import streamlit as st
 import cv2
 import skimage
 from PIL import Image, ImageColor
-from ultralytics import YOLO
 from sklearn.metrics import mean_squared_error
 from utils.labels_utils import get_labels_dics
 import os
