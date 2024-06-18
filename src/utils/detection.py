@@ -10,6 +10,7 @@ import skimage
 from PIL import Image, ImageColor
 from sklearn.metrics import mean_squared_error
 from utils.labels_utils import get_labels_dics
+import torch
 
 
 def create_colors_info(team1_name, team1_p_color, team1_gk_color, team2_name,
@@ -54,9 +55,11 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
     colors_dic, color_list_lab = create_colors_info('Team A', 'blue', 'cyan',
                                                     'Team B', 'pink', 'violet')
 
-
     nbr_team_colors = len(list(colors_dic.values())[0])
-
+    if torch.cuda.is_available():
+        device = 'CUDA'
+    else:
+        device = 'cpu'
     if (output_file_name is not None) and (len(output_file_name) == 0):
         output_file_name = generate_file_name()
 
@@ -87,10 +90,10 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
     ball_track_history = {'src': [], 'dst': []}
 
     nbr_frames_no_ball = 0
-
+    video_fps = np.round(cap.get(cv2.CAP_PROP_FPS))
+    results_keypoints = None
     # Loop over input video frames
     for frame_nbr in range(1, tot_nbr_frames + 1):
-
         # Update progress bar
         percent_complete = int(frame_nbr / (tot_nbr_frames) * 100)
         st_prog_bar.progress(
@@ -116,27 +119,37 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
 
             # Run YOLOv8 players inference on the frame
             results_players = model_players.predict(
-                frame, conf=hyper_params['players_conf'], verbose=False)
-            # Run YOLOv8 field keypoints inference on the frame
-            results_keypoints = model_keypoints.predict(
-                frame, conf=hyper_params['keypoints_conf'], verbose=False)
+                frame,
+                conf=hyper_params['players_conf'],
+                device=device,
+                verbose=False)
+            # Run YOLOv8 field keypoints inference each one second
+            if (frame_nbr - 1 % video_fps == 0):
+                results_keypoints = model_keypoints.predict(
+                    frame,
+                    conf=hyper_params['keypoints_conf'],
+                    device=device,
+                    verbose=False)
 
             ## Extract detections information
-            bboxes_p = results_players[0].boxes.xyxy.cpu().numpy(
+            bboxes_p = getattr(results_players[0].boxes.xyxy, device)().numpy(
             )  # Detected players, referees and ball (x,y,x,y) bounding boxes
-            bboxes_p_c = results_players[0].boxes.xywh.cpu().numpy(
+            bboxes_p_c = getattr(results_players[0].boxes.xywh, device)(
+            ).numpy(
             )  # Detected players, referees and ball (x,y,w,h) bounding boxes
-            labels_p = list(results_players[0].boxes.cls.cpu().numpy(
-            ))  # Detected players, referees and ball labels list
-            confs_p = list(results_players[0].boxes.conf.cpu().numpy(
-            ))  # Detected players, referees and ball confidence level
+            labels_p = list(
+                getattr(results_players[0].boxes.cls, device)
+                ().numpy())  # Detected players, referees and ball labels list
+            confs_p = list(
+                getattr(results_players[0].boxes.conf, device)().numpy()
+            )  # Detected players, referees and ball confidence level
 
-            bboxes_k = results_keypoints[0].boxes.xyxy.cpu().numpy(
-            )  # Detected field keypoints (x,y,x,y) bounding boxes
-            bboxes_k_c = results_keypoints[0].boxes.xywh.cpu().numpy(
-            )  # Detected field keypoints (x,y,w,h) bounding boxes
-            labels_k = list(results_keypoints[0].boxes.cls.cpu().numpy()
-                            )  # Detected field keypoints labels list
+            bboxes_k_c = getattr(results_keypoints[0].boxes.xywh, device)(
+            ).numpy()  # Detected field keypoints (x,y,w,h) bounding boxes
+            labels_k = list(
+                getattr(
+                    results_keypoints[0].boxes.cls,
+                    device)().numpy())  # Detected field keypoints labels list
 
             # Convert detected numerical labels to alphabetical labels
             detected_labels = [classes_names_dic[i] for i in labels_k]
@@ -278,14 +291,12 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
             obj_palette_list = []  # Initialize players color palette list
             palette_interval = (
                 0, num_pal_colors
-            )  # Color interval to extract from dominant colors palette (1rd to 5th color)
+            )  # Color interval to extract from dominant colors palette
 
             ## Loop over detected players (label 0) and extract dominant colors palette based on defined interval
-            for i, j in enumerate(
-                    list(results_players[0].boxes.cls.cpu().numpy())):
+            for i, j in enumerate(labels_p):
                 if int(j) == 0:
-                    bbox = results_players[0].boxes.xyxy.cpu().numpy()[
-                        i, :]  # Get bbox info (x,y,x,y)
+                    bbox = bboxes_p[i, :]  # Get bbox info (x,y,x,y)
                     obj_img = frame_rgb[
                         int(bbox[1]):int(bbox[3]),
                         int(bbox[0]):int(
