@@ -42,28 +42,18 @@ def generate_file_name():
     return output_file_name
 
 
-hyper_params = {'players_conf': 0.6, 'keypoints_conf': 0.7, 2: 7}
-ball_track_hyperparams = {0: 30, 1: 100, 2: 35}
-plot_hyperparams = {0: False, 1: True, 2: True, 3: True}
-colors_dic, color_list_lab = create_colors_info('Team A', 'blue', 'cyan',
-                                                'Team B', 'pink', 'violet')
-
-
 def detect(cap, stframe, output_file_name, save_output, model_players,
            model_keypoints, tac_map, num_pal_colors):
 
-    show_k = plot_hyperparams[0]
-    show_pal = plot_hyperparams[1]
-    show_b = plot_hyperparams[2]
-    show_p = plot_hyperparams[3]
+    hyper_params = {'players_conf': 0.6, 'keypoints_conf': 0.7, 'k_d_tol': 7}
+    ball_track_hyperparams = {
+        'nbr_frames_no_ball_thresh': 30,
+        'ball_track_dist_thresh': 100,
+        'max_track_length': 35
+    }
+    colors_dic, color_list_lab = create_colors_info('Team A', 'blue', 'cyan',
+                                                    'Team B', 'pink', 'violet')
 
-    p_conf = hyper_params['players_conf']
-    k_conf = hyper_params['keypoints_conf']
-    k_d_tol = hyper_params[2]
-
-    nbr_frames_no_ball_thresh = ball_track_hyperparams[0]
-    ball_track_dist_thresh = ball_track_hyperparams[1]
-    max_track_length = ball_track_hyperparams[2]
 
     nbr_team_colors = len(list(colors_dic.values())[0])
 
@@ -113,7 +103,8 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
         # Reset tactical map image for each new frame
         tac_map_copy = tac_map.copy()
 
-        if nbr_frames_no_ball > nbr_frames_no_ball_thresh:
+        if nbr_frames_no_ball > ball_track_hyperparams[
+                'nbr_frames_no_ball_thresh']:
             ball_track_history['dst'] = []
             ball_track_history['src'] = []
 
@@ -124,9 +115,11 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
             ################################################
 
             # Run YOLOv8 players inference on the frame
-            results_players = model_players(frame, conf=p_conf, verbose=False)
+            results_players = model_players.predict(
+                frame, conf=hyper_params['players_conf'], verbose=False)
             # Run YOLOv8 field keypoints inference on the frame
-            results_keypoints = model_keypoints(frame, conf=k_conf, verbose=False)
+            results_keypoints = model_keypoints.predict(
+                frame, conf=hyper_params['keypoints_conf'], verbose=False)
 
             ## Extract detections information
             bboxes_p = results_players[0].boxes.xyxy.cpu().numpy(
@@ -181,7 +174,8 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                         coor_error = mean_squared_error(
                             coor_common_label_prev, coor_common_label_curr
                         )  # Calculate error between previous and current common keypoints coordinates
-                        update_homography = coor_error > k_d_tol  # Check if error surpassed the predefined tolerance level
+                        update_homography = coor_error > hyper_params[
+                            'k_d_tol']  # Check if error surpassed the predefined tolerance level
                     else:
                         update_homography = True
                 else:
@@ -242,35 +236,36 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                     dest_point = dest_point / dest_point[2]
                     detected_ball_dst_pos = np.transpose(dest_point)
                     # track ball history
-                    if show_b:
-                        if len(ball_track_history['src']) > 0:
-                            if np.linalg.norm(detected_ball_src_pos -
-                                              ball_track_history['src'][-1]
-                                              ) < ball_track_dist_thresh:
-                                ball_track_history['src'].append(
-                                    (int(detected_ball_src_pos[0]),
-                                     int(detected_ball_src_pos[1])))
-                                ball_track_history['dst'].append(
-                                    (int(detected_ball_dst_pos[0]),
-                                     int(detected_ball_dst_pos[1])))
-                            else:
-                                ball_track_history['src'] = [
-                                    (int(detected_ball_src_pos[0]),
-                                     int(detected_ball_src_pos[1]))
-                                ]
-                                ball_track_history['dst'] = [
-                                    (int(detected_ball_dst_pos[0]),
-                                     int(detected_ball_dst_pos[1]))
-                                ]
-                        else:
+                    if len(ball_track_history['src']) > 0:
+                        if np.linalg.norm(
+                                detected_ball_src_pos -
+                                ball_track_history['src'][-1]
+                        ) < ball_track_hyperparams['ball_track_dist_thresh']:
                             ball_track_history['src'].append(
                                 (int(detected_ball_src_pos[0]),
                                  int(detected_ball_src_pos[1])))
                             ball_track_history['dst'].append(
                                 (int(detected_ball_dst_pos[0]),
                                  int(detected_ball_dst_pos[1])))
+                        else:
+                            ball_track_history['src'] = [
+                                (int(detected_ball_src_pos[0]),
+                                 int(detected_ball_src_pos[1]))
+                            ]
+                            ball_track_history['dst'] = [
+                                (int(detected_ball_dst_pos[0]),
+                                 int(detected_ball_dst_pos[1]))
+                            ]
+                    else:
+                        ball_track_history['src'].append(
+                            (int(detected_ball_src_pos[0]),
+                             int(detected_ball_src_pos[1])))
+                        ball_track_history['dst'].append(
+                            (int(detected_ball_dst_pos[0]),
+                             int(detected_ball_dst_pos[1])))
 
-                if len(ball_track_history) > max_track_length:
+                if len(ball_track_history
+                       ) > ball_track_hyperparams['max_track_length']:
                     ball_track_history['src'].pop(0)
                     ball_track_history['dst'].pop(0)
 
@@ -389,49 +384,11 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                 conf = confs_p[i]  # Get confidence of current detected object
                 if labels_p[
                         i] == 0:  # Display annotation for detected players (label 0)
-
-                    # Display extracted color palette for each detected player
-                    if show_pal:
-                        palette = obj_palette_list[
-                            j]  # Get color palette of the detected player
-                        for k, c in enumerate(palette):
-                            c_bgr = c[::-1]  # Convert color to BGR
-                            annotated_frame = cv2.rectangle(
-                                annotated_frame,
-                                (
-                                    int(bboxes_p[i, 2]) +
-                                    3,  # Add color palette annotation on frame
-                                    int(bboxes_p[i, 1]) +
-                                    k * palette_box_size),
-                                (int(bboxes_p[i, 2]) + palette_box_size,
-                                 int(bboxes_p[i, 1]) + (palette_box_size) *
-                                 (k + 1)),
-                                c_bgr,
-                                -1)
-
                     team_name = list(colors_dic.keys())[players_teams_list[
                         j]]  # Get detected player team prediction
                     color_rgb = colors_dic[team_name][
                         0]  # Get detected player team color
                     color_bgr = color_rgb[::-1]  # Convert color to bgr
-                    if show_p:
-                        annotated_frame = cv2.rectangle(
-                            annotated_frame,
-                            (int(bboxes_p[i, 0]), int(bboxes_p[i, 1])
-                             ),  # Add bbox annotations with team colors
-                            (int(bboxes_p[i, 2]), int(bboxes_p[i, 3])),
-                            color_bgr,
-                            1)
-
-                        annotated_frame = cv2.putText(
-                            annotated_frame,
-                            team_name +
-                            f" {conf:.2f}",  # Add team name annotations
-                            (int(bboxes_p[i, 0]), int(bboxes_p[i, 1]) - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5,
-                            color_bgr,
-                            2)
 
                     # Add tactical map player postion color coded annotation if more than 3 field keypoints are detected
                     if 'homog' in locals():
@@ -449,42 +406,15 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                             thickness=1)
 
                     j += 1  # Update players counter
-                else:  # Display annotation for otehr detections (label 1, 2)
-                    annotated_frame = cv2.rectangle(
-                        annotated_frame,
-                        (int(bboxes_p[i, 0]), int(bboxes_p[i, 1])
-                         ),  # Add white colored bbox annotations
-                        (int(bboxes_p[i, 2]), int(bboxes_p[i, 3])),
-                        (255, 255, 255),
-                        1)
-                    annotated_frame = cv2.putText(
-                        annotated_frame,
-                        labels_dic[labels_p[i]] +
-                        f" {conf:.2f}",  # Add white colored label text annotations
-                        (int(bboxes_p[i, 0]), int(bboxes_p[i, 1]) - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (255, 255, 255),
-                        2)
 
-                    # Add tactical map ball postion annotation if detected
-                    if detected_ball_src_pos is not None and 'homog' in locals(
-                    ):
-                        tac_map_copy = cv2.circle(
-                            tac_map_copy, (int(detected_ball_dst_pos[0]),
-                                           int(detected_ball_dst_pos[1])),
-                            radius=5,
-                            color=ball_color_bgr,
-                            thickness=3)
-            if show_k:
-                for i in range(bboxes_k.shape[0]):
-                    annotated_frame = cv2.rectangle(
-                        annotated_frame,
-                        (int(bboxes_k[i, 0]), int(bboxes_k[i, 1])
-                         ),  # Add bbox annotations with team colors
-                        (int(bboxes_k[i, 2]), int(bboxes_k[i, 3])),
-                        (0, 0, 0),
-                        1)
+                # Add tactical map ball postion annotation if detected
+                if detected_ball_src_pos is not None and 'homog' in locals():
+                    tac_map_copy = cv2.circle(tac_map_copy,
+                                              (int(detected_ball_dst_pos[0]),
+                                               int(detected_ball_dst_pos[1])),
+                                              radius=5,
+                                              color=ball_color_bgr,
+                                              thickness=3)
             # Plot the tracks
             if len(ball_track_history['src']) > 0:
                 points = np.hstack(ball_track_history['dst']).astype(
