@@ -64,8 +64,8 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
         output_file_name = generate_file_name()
 
     # Read tactical map image
-    tac_width = tac_map.shape[0]
-    tac_height = tac_map.shape[1]
+    tac_width = 640
+    tac_height = 480
 
     # Create output video writer
     if save_output:
@@ -384,17 +384,14 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
             # Updated Frame & Tactical Map With Annotations #
             #################################################
 
-            ball_color_bgr = (
-                0, 0, 255)  # Color (GBR) for ball annotation on tactical map
+            ball_color_bgr = (0, 0, 255)  # Color (BGR) for ball annotation on tactical map
             j = 0  # Initializing counter of detected players
-            palette_box_size = 10  # Set color box size in pixels (for display)
             annotated_frame = frame  # Create annotated frame
 
             # Loop over all detected object by players detection model
             for i in range(bboxes_p.shape[0]):
                 conf = confs_p[i]  # Get confidence of current detected object
-                if labels_p[
-                        i] == 0:  # Display annotation for detected players (label 0)
+                if labels_p[i] == 0:  # Display annotation for detected players (label 0)
                     team_name = list(colors_dic.keys())[players_teams_list[
                         j]]  # Get detected player team prediction
                     color_rgb = colors_dic[team_name][
@@ -406,15 +403,15 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                         tac_map_copy = cv2.circle(
                             tac_map_copy,
                             (int(pred_dst_pts[j][0]), int(pred_dst_pts[j][1])),
-                            radius=5,
-                            color=color_bgr,
+                            radius=15,
+                            color=(255, 0, 0),
                             thickness=-1)
                         tac_map_copy = cv2.circle(
                             tac_map_copy,
                             (int(pred_dst_pts[j][0]), int(pred_dst_pts[j][1])),
-                            radius=5,
-                            color=(0, 0, 0),
-                            thickness=1)
+                            radius=15,
+                            color=(0, 255, 0),
+                            thickness=-1)
 
                     j += 1  # Update players counter
 
@@ -423,9 +420,9 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                     tac_map_copy = cv2.circle(tac_map_copy,
                                               (int(detected_ball_dst_pos[0]),
                                                int(detected_ball_dst_pos[1])),
-                                              radius=5,
+                                              radius=10,
                                               color=ball_color_bgr,
-                                              thickness=3)
+                                              thickness=1)
             # Plot the tracks
             if len(ball_track_history['src']) > 0:
                 points = np.hstack(ball_track_history['dst']).astype(
@@ -435,33 +432,15 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
                                              color=(0, 0, 100),
                                              thickness=2)
 
-            # Combine annotated frame and tactical map in one image with colored border separation
-            border_color = [255, 255, 255]  # Set border color (BGR)
-            annotated_frame = cv2.copyMakeBorder(
-                annotated_frame,
-                40,
-                10,
-                10,
-                10,  # Add borders to annotated frame
-                cv2.BORDER_CONSTANT,
-                value=border_color)
-            tac_map_copy = cv2.copyMakeBorder(
-                tac_map_copy,
-                70,
-                50,
-                10,
-                10,
-                cv2.BORDER_CONSTANT,  # Add borders to tactical map 
-                value=border_color)
             tac_map_copy = cv2.resize(
                 tac_map_copy,
                 (tac_map_copy.shape[1],
                  annotated_frame.shape[0]))  # Resize tactical map
+            cv2.putText(tac_map_copy, "Tactical View", (50, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
             final_img = cv2.hconcat(
                 (annotated_frame, tac_map_copy))  # Concatenate both images
             ## Add info annotation
-            cv2.putText(final_img, "Tactical Map", (1370, 60),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
             new_frame_time = time.time(
             )  # Get time after finished processing current frame
