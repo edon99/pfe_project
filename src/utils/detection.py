@@ -4,14 +4,17 @@ import pandas as pd
 import os
 import time
 import streamlit as st
-
 import cv2
 import skimage
 from PIL import Image, ImageColor
 from sklearn.metrics import mean_squared_error
+from sklearn.cluster import KMeans
 from utils.labels_utils import get_labels_dics
 import torch
 
+from utils.detect import isclose_int, assign_team
+
+label_mapping = {0: 'Player', 1: 'Referee', 2: 'Ball'} 
 
 def create_colors_info(team1_name, team1_p_color, team1_gk_color, team2_name,
                        team2_p_color, team2_gk_color):
@@ -43,10 +46,15 @@ def generate_file_name():
     return output_file_name
 
 
-def detect(cap, stframe, output_file_name, save_output, model_players,
+def detect(cap, stframe, team1, team2, output_file_name, save_output, model_players,
            model_keypoints, tac_map, num_pal_colors):
+    
+    team_colors = {
+                    team1: None,
+                    team2: None
+                }
 
-    hyper_params = {'players_conf': 0.6, 'keypoints_conf': 0.7, 'k_d_tol': 7}
+    hyper_params = {'players_conf': 0.4, 'keypoints_conf': 0.7, 'k_d_tol': 7}
     ball_track_hyperparams = {
         'nbr_frames_no_ball_thresh': 30,
         'ball_track_dist_thresh': 100,
@@ -297,6 +305,8 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
             for i, j in enumerate(labels_p):
                 if int(j) == 0:
                     bbox = bboxes_p[i, :]  # Get bbox info (x,y,x,y)
+
+                
                     obj_img = frame_rgb[
                         int(bbox[1]):int(bbox[3]),
                         int(bbox[0]):int(
@@ -390,14 +400,36 @@ def detect(cap, stframe, output_file_name, save_output, model_players,
 
             # Loop over all detected object by players detection model
             for i in range(bboxes_p.shape[0]):
+                x1, y1, x2, y2 = bboxes_p[i].astype(int)
+                
+
+                x1 = int(x1)
+                y1 = int(y1)
+                x2 = int(x2)
+                y2 = int(y2) 
+                roi = frame[y1:y2, x1:x2]
+                roi_reshaped = roi.reshape((-1, 3))
+                    
+                   
+   
+                kmeans = KMeans(n_clusters=1)
+                kmeans.fit(roi_reshaped)
+
+                    #get dom colour
+                dom_color = kmeans.cluster_centers_[0]
+
+                    # convert to integer tuple
+                dom_color = tuple(map(int, dom_color))
+
+                team_name = assign_team(dom_color, team_colors, team1, team2)
+
+                frame = cv2.rectangle(frame, (x1, y1), (x2, y2), dom_color, 2)
+                label = label_mapping[labels_p[i]]
+                annotated_frame = cv2.putText(frame, f"{team_name} {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2)
+
                 conf = confs_p[i]  # Get confidence of current detected object
                 if labels_p[i] == 0:  # Display annotation for detected players (label 0)
-                    team_name = list(colors_dic.keys())[players_teams_list[
-                        j]]  # Get detected player team prediction
-                    color_rgb = colors_dic[team_name][
-                        0]  # Get detected player team color
-                    color_bgr = color_rgb[::-1]  # Convert color to bgr
-
+                    
                     # Add tactical map player postion color coded annotation if more than 3 field keypoints are detected
                     if 'homog' in locals():
                         tac_map_copy = cv2.circle(

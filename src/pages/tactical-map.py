@@ -8,8 +8,10 @@ from utils.detection import detect
 @st.cache_data
 def init_data():
     players_model, keypoints_model = load_models()
-    tac_map = cv2.imread('src/assets/2d-pitch.png')
+    tac_map = cv2.imread('assets/2d-pitch.png')
     return players_model, keypoints_model, tac_map
+
+
 
 
 def main():
@@ -28,6 +30,11 @@ def main():
         else:
             output_file_name = 'out'
         col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
+        with col1:
+            team1 = st.text_input(label="Team 1", value="Team A")
+        with col2:
+            team2 = st.text_input(label="Team 2", value="Team B")
         with col1:
             start_button = st.button("Start detection", "start")
         with col2:
@@ -43,6 +50,7 @@ def main():
             st.toast(f'Detection Started!')
             status = detect(cap,
                             stframe,
+                            team1, team2,
                             output_file_name,
                             save_output,
                             players_model,
