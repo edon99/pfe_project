@@ -3,3 +3,5 @@ env/
 __pycache__/
 tactical3.mp4
 gitignore/
+src/utils/labels_utils.py
+src/utils/load_model.py
