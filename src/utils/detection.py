@@ -15,26 +15,6 @@ import torch
 from utils.detect import isclose_int, assign_team
 
 label_mapping = {0: 'Player', 1: 'Referee', 2: 'Ball'} 
-
-def create_colors_info(team1_name, team1_p_color, team1_gk_color, team2_name,
-                       team2_p_color, team2_gk_color):
-    team1_p_color_rgb = ImageColor.getcolor(team1_p_color, "RGB")
-    team1_gk_color_rgb = ImageColor.getcolor(team1_gk_color, "RGB")
-    team2_p_color_rgb = ImageColor.getcolor(team2_p_color, "RGB")
-    team2_gk_color_rgb = ImageColor.getcolor(team2_gk_color, "RGB")
-
-    colors_dic = {
-        team1_name: [team1_p_color_rgb, team1_gk_color_rgb],
-        team2_name: [team2_p_color_rgb, team2_gk_color_rgb]
-    }
-    colors_list = colors_dic[team1_name] + colors_dic[
-        team2_name]  # Define color list to be used for detected player team prediction
-    color_list_lab = [
-        skimage.color.rgb2lab([i / 255 for i in c]) for c in colors_list
-    ]  # Converting color_list to L*a*b* space
-    return colors_dic, color_list_lab
-
-
 def generate_file_name():
     list_video_files = os.listdir('./outputs/')
     idx = 0
@@ -54,16 +34,13 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     team2: None
                 }
 
-    hyper_params = {'players_conf': 0.4, 'keypoints_conf': 0.7, 'k_d_tol': 7}
+    hyper_params = {'players_conf': 0.4, 'keypoints_conf': 0.5, 'k_d_tol': 7}
     ball_track_hyperparams = {
         'nbr_frames_no_ball_thresh': 30,
         'ball_track_dist_thresh': 100,
         'max_track_length': 35
     }
-    colors_dic, color_list_lab = create_colors_info('Team A', 'blue', 'cyan',
-                                                    'Team B', 'pink', 'violet')
 
-    nbr_team_colors = len(list(colors_dic.values())[0])
     if torch.cuda.is_available():
         device = 'CUDA'
     else:
@@ -89,10 +66,6 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
 
     keypoints_map_pos, classes_names_dic, labels_dic = get_labels_dics()
 
-    # Set variable to record the time when we processed last frame
-    prev_frame_time = 0
-    # Set variable to record the time at which we processed current frame
-    new_frame_time = 0
 
     # Store the ball track history
     ball_track_history = {'src': [], 'dst': []}
@@ -148,9 +121,10 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
             labels_p = list(
                 getattr(results_players[0].boxes.cls, device)
                 ().numpy())  # Detected players, referees and ball labels list
-            confs_p = list(
-                getattr(results_players[0].boxes.conf, device)().numpy()
-            )  # Detected players, referees and ball confidence level
+            
+            # confs_p = list(
+            #     getattr(results_players[0].boxes.conf, device)().numpy()
+            # )  
 
             bboxes_k_c = getattr(results_keypoints[0].boxes.xywh, device)(
             ).numpy()  # Detected field keypoints (x,y,w,h) bounding boxes
@@ -179,6 +153,7 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     # Determine common detected field keypoints between previous and current frames
                     common_labels = set(detected_labels_prev) & set(
                         detected_labels)
+                    #
                     # When at least 4 common keypoints are detected, determine if they are displaced on average beyond a certain tolerance level
                     if len(common_labels) > 3:
                         common_label_idx_prev = [
@@ -256,6 +231,7 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     dest_point = np.matmul(homog, np.transpose(pt))
                     dest_point = dest_point / dest_point[2]
                     detected_ball_dst_pos = np.transpose(dest_point)
+
                     # track ball history
                     if len(ball_track_history['src']) > 0:
                         if np.linalg.norm(
@@ -290,128 +266,24 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     ball_track_history['src'].pop(0)
                     ball_track_history['dst'].pop(0)
 
-            ######### Part 2 ##########
-            # Players Team Prediction #
-            ###########################
-
-            frame_rgb = cv2.cvtColor(frame,
-                                     cv2.COLOR_BGR2RGB)  # Convert frame to RGB
-            obj_palette_list = []  # Initialize players color palette list
-            palette_interval = (
-                0, num_pal_colors
-            )  # Color interval to extract from dominant colors palette
-
-            ## Loop over detected players (label 0) and extract dominant colors palette based on defined interval
-            for i, j in enumerate(labels_p):
-                if int(j) == 0:
-                    bbox = bboxes_p[i, :]  # Get bbox info (x,y,x,y)
-
-                
-                    obj_img = frame_rgb[
-                        int(bbox[1]):int(bbox[3]),
-                        int(bbox[0]):int(
-                            bbox[2])]  # Crop bbox out of the frame
-                    obj_img_w, obj_img_h = obj_img.shape[1], obj_img.shape[0]
-                    center_filter_x1 = np.max([
-                        (obj_img_w // 2) - (obj_img_w // 5), 1
-                    ])
-                    center_filter_x2 = (obj_img_w // 2) + (obj_img_w // 5)
-                    center_filter_y1 = np.max([
-                        (obj_img_h // 3) - (obj_img_h // 5), 1
-                    ])
-                    center_filter_y2 = (obj_img_h // 3) + (obj_img_h // 5)
-                    center_filter = obj_img[center_filter_y1:center_filter_y2,
-                                            center_filter_x1:center_filter_x2]
-                    obj_pil_img = Image.fromarray(
-                        np.uint8(center_filter))  # Convert to pillow image
-                    reduced = obj_pil_img.convert(
-                        "P", palette=Image.Palette.WEB
-                    )  # Convert to web palette (216 colors)
-                    palette = reduced.getpalette(
-                    )  # Get palette as [r,g,b,r,g,b,...]
-                    palette = [palette[3 * n:3 * n + 3] for n in range(256)
-                               ]  # Group 3 by 3 = [[r,g,b],[r,g,b],...]
-                    color_count = [
-                        (n, palette[m]) for n, m in reduced.getcolors()
-                    ]  # Create list of palette colors with their frequency
-                    RGB_df = pd.DataFrame(
-                        color_count, columns=['cnt', 'RGB']
-                    ).sort_values(  # Create dataframe based on defined palette interval
-                        by='cnt',
-                        ascending=False).iloc[
-                            palette_interval[0]:palette_interval[1], :]
-                    palette = list(
-                        RGB_df.RGB
-                    )  # Convert palette to list (for faster processing)
-
-                    # Update detected players color palette list
-                    obj_palette_list.append(palette)
-
-            ## Calculate distances between each color from every detected player color palette and the predefined teams colors
-            players_distance_features = []
-            # Loop over detected players extracted color palettes
-            for palette in obj_palette_list:
-                palette_distance = []
-                palette_lab = [
-                    skimage.color.rgb2lab([i / 255 for i in color])
-                    for color in palette
-                ]  # Convert colors to L*a*b* space
-                # Loop over colors in palette
-                for color in palette_lab:
-                    distance_list = []
-                    # Loop over predefined list of teams colors
-                    for c in color_list_lab:
-                        #distance = np.linalg.norm([i/255 - j/255 for i,j in zip(color,c)])
-                        distance = skimage.color.deltaE_cie76(
-                            color, c
-                        )  # Calculate Euclidean distance in Lab color space
-                        distance_list.append(
-                            distance)  # Update distance list for current color
-                    palette_distance.append(
-                        distance_list
-                    )  # Update distance list for current palette
-                players_distance_features.append(
-                    palette_distance)  # Update distance features list
-
-            ## Predict detected players teams based on distance features
-            players_teams_list = []
-            # Loop over players distance features
-            for distance_feats in players_distance_features:
-                vote_list = []
-                # Loop over distances for each color
-                for dist_list in distance_feats:
-                    team_idx = dist_list.index(
-                        min(dist_list)
-                    ) // nbr_team_colors  # Assign team index for current color based on min distance
-                    vote_list.append(
-                        team_idx
-                    )  # Update vote voting list with current color team prediction
-                players_teams_list.append(
-                    max(vote_list, key=vote_list.count
-                        ))  # Predict current player team by vote counting
-
+         
             #################### Part 3 #####################
-            # Updated Frame & Tactical Map With Annotations #
+            # Player Team assignment & Tactical Map With Annotations #
             #################################################
 
             ball_color_bgr = (0, 0, 255)  # Color (BGR) for ball annotation on tactical map
             j = 0  # Initializing counter of detected players
-            annotated_frame = frame  # Create annotated frame
+            
 
             # Loop over all detected object by players detection model
             for i in range(bboxes_p.shape[0]):
                 x1, y1, x2, y2 = bboxes_p[i].astype(int)
-                
+                label = label_mapping[labels_p[i]]
 
-                x1 = int(x1)
-                y1 = int(y1)
-                x2 = int(x2)
-                y2 = int(y2) 
                 roi = frame[y1:y2, x1:x2]
                 roi_reshaped = roi.reshape((-1, 3))
                     
-                   
-   
+                
                 kmeans = KMeans(n_clusters=1)
                 kmeans.fit(roi_reshaped)
 
@@ -421,13 +293,15 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     # convert to integer tuple
                 dom_color = tuple(map(int, dom_color))
 
-                team_name = assign_team(dom_color, team_colors, team1, team2)
+                team_name = assign_team(dom_color, team_colors, team1, team2)if label == "Player" else ""
 
-                frame = cv2.rectangle(frame, (x1, y1), (x2, y2), dom_color, 2)
-                label = label_mapping[labels_p[i]]
-                annotated_frame = cv2.putText(frame, f"{team_name} {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2)
-
-                conf = confs_p[i]  # Get confidence of current detected object
+                annotated_frame = cv2.rectangle(frame, (x1, y1), (x2, y2), dom_color, 2)
+                
+                if label == 'Player':
+                    annotated_frame = cv2.putText(frame, f"{team_name} {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2)
+                else:
+                    annotated_frame = cv2.putText(frame, f"{label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2) 
+                
                 if labels_p[i] == 0:  # Display annotation for detected players (label 0)
                     
                     # Add tactical map player postion color coded annotation if more than 3 field keypoints are detected
@@ -442,7 +316,7 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                             tac_map_copy,
                             (int(pred_dst_pts[j][0]), int(pred_dst_pts[j][1])),
                             radius=15,
-                            color=(0, 255, 0),
+                            color=dom_color,
                             thickness=-1)
 
                     j += 1  # Update players counter
@@ -472,19 +346,10 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
             final_img = cv2.hconcat(
                 (annotated_frame, tac_map_copy))  # Concatenate both images
-            ## Add info annotation
-
-            new_frame_time = time.time(
-            )  # Get time after finished processing current frame
-            fps = 1 / (new_frame_time - prev_frame_time
-                       )  # Calculate FPS as 1/(frame proceesing duration)
-            prev_frame_time = new_frame_time  # Save current time to be used in next frame
-            cv2.putText(final_img, "FPS: " + str(int(fps)), (20, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
 
             # Display the annotated frame
             stframe.image(final_img, channels="BGR")
-            #cv2.imshow("YOLOv8 Inference", frame)
+        
             if save_output:
                 output.write(cv2.resize(final_img, (width, height)))
 
