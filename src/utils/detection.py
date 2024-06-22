@@ -1,20 +1,18 @@
 # Import librarie s
 import numpy as np
-import pandas as pd
 import os
-import time
 import streamlit as st
 import cv2
-import skimage
-from PIL import Image, ImageColor
 from sklearn.metrics import mean_squared_error
 from sklearn.cluster import KMeans
 from utils.labels_utils import get_labels_dics
 import torch
 
-from utils.detect import isclose_int, assign_team
+from utils.detect import assign_team
 
-label_mapping = {0: 'Player', 1: 'Referee', 2: 'Ball'} 
+label_mapping = {0: 'Player', 1: 'Referee', 2: 'Ball'}
+
+
 def generate_file_name():
     list_video_files = os.listdir('./outputs/')
     idx = 0
@@ -26,13 +24,17 @@ def generate_file_name():
     return output_file_name
 
 
-def detect(cap, stframe, team1, team2, output_file_name, save_output, model_players,
-           model_keypoints, tac_map, num_pal_colors):
-    
-    team_colors = {
-                    team1: None,
-                    team2: None
-                }
+def get_device_type():
+    if torch.cuda.is_available():
+        return 'cuda'
+    else:
+        return 'cpu'
+
+
+def detect(cap, stframe, team1, team2, model_players, model_keypoints,
+           tac_map):
+
+    team_colors = {team1: None, team2: None}
 
     hyper_params = {'players_conf': 0.4, 'keypoints_conf': 0.5, 'k_d_tol': 7}
     ball_track_hyperparams = {
@@ -40,32 +42,13 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
         'ball_track_dist_thresh': 100,
         'max_track_length': 35
     }
-
-    if torch.cuda.is_available():
-        device = 'CUDA'
-    else:
-        device = 'cpu'
-    if (output_file_name is not None) and (len(output_file_name) == 0):
-        output_file_name = generate_file_name()
-
-    # Read tactical map image
-    tac_width = 640
-    tac_height = 480
-
-    # Create output video writer
-    if save_output:
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) + tac_width
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) + tac_height
-        output = cv2.VideoWriter(f'./outputs/{output_file_name}.mp4',
-                                 cv2.VideoWriter_fourcc(*'mp4v'), 30.0,
-                                 (width, height))
+    device = get_device_type()
 
     # Create progress bar
     tot_nbr_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     st_prog_bar = st.progress(0, text='Detection starting.')
 
     keypoints_map_pos, classes_names_dic, labels_dic = get_labels_dics()
-
 
     # Store the ball track history
     ball_track_history = {'src': [], 'dst': []}
@@ -121,10 +104,10 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
             labels_p = list(
                 getattr(results_players[0].boxes.cls, device)
                 ().numpy())  # Detected players, referees and ball labels list
-            
+
             # confs_p = list(
             #     getattr(results_players[0].boxes.conf, device)().numpy()
-            # )  
+            # )
 
             bboxes_k_c = getattr(results_keypoints[0].boxes.xywh, device)(
             ).numpy()  # Detected field keypoints (x,y,w,h) bounding boxes
@@ -266,14 +249,13 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
                     ball_track_history['src'].pop(0)
                     ball_track_history['dst'].pop(0)
 
-         
             #################### Part 3 #####################
             # Player Team assignment & Tactical Map With Annotations #
             #################################################
 
-            ball_color_bgr = (0, 0, 255)  # Color (BGR) for ball annotation on tactical map
+            ball_color_bgr = (
+                0, 0, 255)  # Color (BGR) for ball annotation on tactical map
             j = 0  # Initializing counter of detected players
-            
 
             # Loop over all detected object by players detection model
             for i in range(bboxes_p.shape[0]):
@@ -282,28 +264,21 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
 
                 roi = frame[y1:y2, x1:x2]
                 roi_reshaped = roi.reshape((-1, 3))
-                    
-                
+
                 kmeans = KMeans(n_clusters=1)
                 kmeans.fit(roi_reshaped)
 
-                    #get dom colour
+                #get dom colour
                 dom_color = kmeans.cluster_centers_[0]
 
-                    # convert to integer tuple
+                # convert to integer tuple
                 dom_color = tuple(map(int, dom_color))
 
-                team_name = assign_team(dom_color, team_colors, team1, team2)if label == "Player" else ""
+                team_name = assign_team(dom_color, team_colors, team1,
+                                        team2) if label == "Player" else ""
 
-                annotated_frame = cv2.rectangle(frame, (x1, y1), (x2, y2), dom_color, 2)
-                
-                if label == 'Player':
-                    annotated_frame = cv2.putText(frame, f"{team_name} {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2)
-                else:
-                    annotated_frame = cv2.putText(frame, f"{label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, dom_color, 2) 
-                
                 if labels_p[i] == 0:  # Display annotation for detected players (label 0)
-                    
+
                     # Add tactical map player postion color coded annotation if more than 3 field keypoints are detected
                     if 'homog' in locals():
                         tac_map_copy = cv2.circle(
@@ -341,17 +316,14 @@ def detect(cap, stframe, team1, team2, output_file_name, save_output, model_play
             tac_map_copy = cv2.resize(
                 tac_map_copy,
                 (tac_map_copy.shape[1],
-                 annotated_frame.shape[0]))  # Resize tactical map
+                 frame.shape[0]))  # Resize tactical map
             cv2.putText(tac_map_copy, "Tactical View", (50, 50),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
             final_img = cv2.hconcat(
-                (annotated_frame, tac_map_copy))  # Concatenate both images
+                (frame, tac_map_copy))  # Concatenate both images
 
             # Display the annotated frame
             stframe.image(final_img, channels="BGR")
-        
-            if save_output:
-                output.write(cv2.resize(final_img, (width, height)))
 
     # Remove progress bar and return
     st_prog_bar.empty()

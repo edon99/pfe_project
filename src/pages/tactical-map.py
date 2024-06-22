@@ -8,7 +8,7 @@ from utils.detection import detect
 @st.cache_data
 def init_data():
     players_model, keypoints_model = load_models()
-    tac_map = cv2.imread('assets/2d-pitch.png')
+    tac_map = cv2.imread('src/assets/2d-pitch.png')
     return players_model, keypoints_model, tac_map
 
 
@@ -22,13 +22,6 @@ def main():
     if input_vide_file is None:
         st.write("Please import your video")
     else:
-        save_output = st.checkbox(label='Save output', value=False)
-        if save_output:
-            output_file_name = st.text_input(
-                label='File Name (Optional)',
-                placeholder='Enter output video file name.')
-        else:
-            output_file_name = 'out'
         col1, col2 = st.columns(2)
         col1, col2 = st.columns(2)
         with col1:
@@ -51,12 +44,9 @@ def main():
             status = detect(cap,
                             stframe,
                             team1, team2,
-                            output_file_name,
-                            save_output,
                             players_model,
                             keypoints_model,
-                            tac_map = tac_map,
-                            num_pal_colors=3)
+                            tac_map = tac_map)
             cap.release()
         else:
             try:
