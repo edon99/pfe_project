@@ -1,8 +1,8 @@
 import streamlit as st
 import tempfile
 import cv2
-from utils.detect import detect
 from utils.load_model import load_keypoints_model
+from utils.detect import track
 
 model = load_keypoints_model()
 
@@ -26,6 +26,6 @@ else:
     stframe = st.empty()
 
     if start_button and not stop_button:
-        detect(stframe, cap, model, conf=0.65)
+        track(stframe, cap, model, conf=0.65)
     else:
         cap.release()

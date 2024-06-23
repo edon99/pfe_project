@@ -1,7 +1,7 @@
 import streamlit as st
 import tempfile
 import cv2
-from utils.detect import detect_test
+from utils.detect import track_players
 from utils.load_model import load_players_model
 
 model = load_players_model()
@@ -33,7 +33,7 @@ else:
 
     if start_button and not stop_button:
         st.toast(f'Detection Started!')
-        detect_test(stframe, cap, model, team1, team2)
+        track_players(stframe, cap, model, team1, team2)
     elif stop_button:
         st.toast(f'Detection Stopped!')
         cap.release()
