@@ -7,7 +7,7 @@ def set_config():
 
 
 def main():
-    st.write("# Home page")
+    st.write("# TactiX")
 
     st.markdown("""
       AI-Powered Software as a Service Solution designed to improve football team performance.
