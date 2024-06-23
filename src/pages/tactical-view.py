@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import cv2
 from utils.load_model import load_models
-from utils.detection import detect
+from video_processing import detect
 
 
 @st.cache_data
@@ -11,12 +11,9 @@ def init_data():
     tac_map = cv2.imread('src/assets/2d-pitch.png')
     return players_model, keypoints_model, tac_map
 
-
-
-
 def main():
     players_model, keypoints_model, tac_map = init_data()
-    st.write("# 2D Tactical Map")
+    st.write("# 2D Tactical View")
     input_vide_file = st.file_uploader(
         'Upload your match', type=['mp4', 'mov', 'avi', 'm4v', 'asf'])
     if input_vide_file is None:
