@@ -12,6 +12,7 @@ def init_data():
     return players_model, keypoints_model, tac_map
 
 def main():
+    st.logo('src/assets/TacticX.png')
     players_model, keypoints_model, tac_map = init_data()
     st.write("# 2D Tactical View")
     input_vide_file = st.file_uploader(
