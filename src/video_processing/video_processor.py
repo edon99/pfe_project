@@ -7,17 +7,15 @@ from .utils import get_device_type, get_labels_dics
 
 class VideoProcessor:
 
-    def __init__(self, cap, stframe, team1, team2, model_players,
+    def __init__(self, cap, stframe, model_players,
                  model_keypoints, tac_map):
         self.cap = cap
         self.stframe = stframe
-        self.team1 = team1
-        self.team2 = team2
         self.model_players = model_players
         self.model_keypoints = model_keypoints
         self.tac_map = tac_map
 
-        self.team_colors = {team1: None, team2: None}
+        self.team_colors = {'team1': None, 'team2': None}
         self.hyper_params = {
             'players_conf': 0.4,
             'keypoints_conf': 0.7,
@@ -29,8 +27,7 @@ class VideoProcessor:
             'max_track_length': 35
         }
         self.device = get_device_type()
-        self.keypoints_map_pos, self.classes_names_dic, self.labels_dic = get_labels_dics(
-        )
+        self.keypoints_map_pos, self.classes_names_dic, self.labels_dic = get_labels_dics()
         self.ball_track_history = {'src': [], 'dst': []}
         self.video_fps = np.round(self.cap.get(cv2.CAP_PROP_FPS))
 
@@ -70,7 +67,7 @@ class VideoProcessor:
                 self.stframe.image(final_img, channels="BGR")
 
         st_prog_bar.empty()
-        return True
+        return success
 
     def detect_and_transform(self, frame, frame_nbr):
         if (frame_nbr - 1) % self.video_fps == 0:  # predeict each second
@@ -312,8 +309,8 @@ class VideoProcessor:
         return cv2.hconcat((frame, tac_map_copy))
 
 
-def detect(cap, stframe, team1, team2, model_players, model_keypoints,
+def detect(cap, stframe, model_players, model_keypoints,
            tac_map):
-    video_processor = VideoProcessor(cap, stframe, team1, team2, model_players,
+    video_processor = VideoProcessor(cap, stframe, model_players,
                                      model_keypoints, tac_map)
     return video_processor.process_video()

@@ -11,6 +11,7 @@ def init_data():
     tac_map = cv2.imread('src/assets/2d-pitch.png')
     return players_model, keypoints_model, tac_map
 
+
 def main():
     st.logo('src/assets/TacticX.png')
     players_model, keypoints_model, tac_map = init_data()
@@ -22,10 +23,6 @@ def main():
     else:
         col1, col2 = st.columns(2)
         col1, col2 = st.columns(2)
-        with col1:
-            team1 = st.text_input(label="Team 1", value="Team A")
-        with col2:
-            team2 = st.text_input(label="Team 2", value="Team B")
         with col1:
             start_button = st.button("Start detection", "start")
         with col2:
@@ -41,10 +38,9 @@ def main():
             st.toast(f'Detection Started!')
             status = detect(cap,
                             stframe,
-                            team1, team2,
                             players_model,
                             keypoints_model,
-                            tac_map = tac_map)
+                            tac_map=tac_map)
             cap.release()
         else:
             try:
@@ -54,6 +50,7 @@ def main():
         if stop_button or status:
             st.toast(f'Detection Stopped!')
             cap.release()
+
 
 if __name__ == '__main__':
     try:
